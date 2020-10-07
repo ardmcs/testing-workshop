@@ -1,6 +1,6 @@
 import {initDb, generate} from 'til-server-test-utils'
 import {omit} from 'lodash'
-import * as usersController from '../users'
+import * as usersController from '../users.todo'
 import db from '../../utils/db'
 
 function setup() {
@@ -28,7 +28,7 @@ function setup() {
   return {req, res}
 }
 
-const safeUser = (u) => omit(u, ['salt', 'hash'])
+const safeUser = u => omit(u, ['salt', 'hash'])
 
 beforeEach(() => initDb())
 
@@ -79,4 +79,38 @@ test('updateUser updates the user with the given changes', async () => {
   expect(user).toEqual(safeUser(updatedUser))
   const userFromDb = await db.getUser(user.id)
   expect(userFromDb).toEqual(updatedUser)
+})
+
+test('deleteUser will 403 if not requested by the user', async () => {
+  const {req, res} = setup()
+  const testUser = await db.insertUser(generate.userData())
+  req.params = {id: testUser.id}
+  req.user = {id: generate.id()}
+  await usersController.deleteUser(req, res)
+  expect(res.status).toHaveBeenCalledTimes(1)
+  expect(res.status).toHaveBeenCalledWith(403)
+  expect(res.send).toHaveBeenCalledTimes(1)
+})
+
+test('deleteUser will 404 if user does not exist', async () => {
+  const {req, res} = setup()
+  req.params = {id: generate.id()}
+  req.user = {id: generate.id()}
+  await usersController.deleteUser(req, res)
+  expect(res.status).toHaveBeenCalledTimes(1)
+  expect(res.status).toHaveBeenCalledWith(404)
+  expect(res.send).toHaveBeenCalledTimes(1)
+})
+
+test('deleteUser will delete the user if properly requested', async () => {
+  const {req, res} = setup()
+  const testUser = await db.insertUser(generate.userData())
+  req.params = {id: testUser.id}
+  req.user = {id: testUser.id}
+  await usersController.deleteUser(req, res)
+  expect(res.status).toHaveBeenCalledTimes(1)
+  expect(res.status).toHaveBeenCalledWith(204)
+  expect(res.send).toHaveBeenCalledTimes(1)
+  const userFromDb = await db.getUser(testUser.id)
+  expect(userFromDb).toBe(undefined)
 })
